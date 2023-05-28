@@ -98,11 +98,10 @@ module.exports.convert = async function (pdf, conversion_config = {}) {
   // the images (indexed like array[page][pixel])
 
   var outputPages = [];
-  var loadingTask = pdfjs.getDocument({data: pdfData, disableFontFace: true, verbosity: 0});
+  var canvasFactory = new NodeCanvasFactory();
+  var loadingTask = pdfjs.getDocument({data: pdfData, canvasFactory, disableFontFace: true, verbosity: 0});
 
   var pdfDocument = await loadingTask.promise
-
-  var canvasFactory = new NodeCanvasFactory();
 
   if (conversion_config.height <= 0 || conversion_config.width <= 0)
     console.warn("Negative viewport dimension given. Defaulting to 100% scale.");
@@ -171,13 +170,10 @@ async function doc_render(pdfDocument, pageNo, canvasFactory, conversion_config)
     viewport.height
   );
 
-  let renderContext = {
+  await page.render({
     canvasContext: canvasAndContext.context,
-    viewport: viewport,
-    canvasFactory: canvasFactory
-  };
-
-  await page.render(renderContext).promise;
+    viewport: viewport
+  }).promise;
 
   // Convert the canvas to an image buffer.
   let image = canvasAndContext.canvas.toBuffer('image/jpeg');
