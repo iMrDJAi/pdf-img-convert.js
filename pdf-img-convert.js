@@ -38,6 +38,7 @@ NodeCanvasFactory.prototype = {
     assert(width > 0 && height > 0, "Invalid canvas size");
     var canvas = Canvas.createCanvas(width, height);
     var context = canvas.getContext("2d");
+    canvas.toBuffer('')
     return {
       canvas: canvas,
       context: context,
@@ -104,7 +105,7 @@ module.exports.convert = async function (pdf, conversion_config = {}) {
   var canvasFactory = new NodeCanvasFactory();
 
   if (conversion_config.height <= 0 || conversion_config.width <= 0)
-    console.error("Negative viewport dimension given. Defaulting to 100% scale.");
+    console.warn("Negative viewport dimension given. Defaulting to 100% scale.");
 
   // If there are page numbers supplied in the conversion config
   if (conversion_config.page_numbers)
@@ -121,6 +122,8 @@ module.exports.convert = async function (pdf, conversion_config = {}) {
     }
   // Otherwise just loop the whole doc
   else
+    if (pdfDocument.numPages > conversion_config.max_pages)
+      throw new Error('Too many pages!');
     for (let i = 1; i <= pdfDocument.numPages; i++) {
       let currentPage = await doc_render(pdfDocument, i, canvasFactory, conversion_config)
       if (currentPage != null) {
@@ -140,13 +143,11 @@ async function doc_render(pdfDocument, pageNo, canvasFactory, conversion_config)
 
   // Page number sanity check
   if (pageNo < 1 || pageNo > pdfDocument.numPages) {
-    console.error("Invalid page number " + pageNo);
-    return
+    throw new Error("Invalid page number " + pageNo);
   }
 
-  if(conversion_config && conversion_config.scale && conversion_config.scale <= 0) {
-    console.error("Invalid scale " + conversion_config.scale);
-    return
+  if (conversion_config && conversion_config.scale && conversion_config.scale <= 0) {
+    throw new Error("Invalid scale " + conversion_config.scale);
   }
 
   // Get the page
@@ -176,10 +177,10 @@ async function doc_render(pdfDocument, pageNo, canvasFactory, conversion_config)
     canvasFactory: canvasFactory
   };
 
-  let renderTask = await page.render(renderContext).promise;
+  await page.render(renderContext).promise;
 
   // Convert the canvas to an image buffer.
-  let image = canvasAndContext.canvas.toBuffer();
+  let image = canvasAndContext.canvas.toBuffer('image/jpeg');
 
   return image;
 } // doc_render
