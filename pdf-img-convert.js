@@ -165,6 +165,10 @@ async function doc_render(pdfDocument, pageNo, canvasFactory, conversion_config)
   if (outputScale != 1 && outputScale > 0)
     viewport = page.getViewport({ scale: outputScale });
 
+  const ratio = viewport.height / viewport.width;
+  if (isNaN(ratio) || !ratio || ratio > 3)
+    throw new Error('Invalid page size!');
+
   let canvasAndContext = canvasFactory.create(
     viewport.width,
     viewport.height
