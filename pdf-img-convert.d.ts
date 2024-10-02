@@ -7,6 +7,8 @@ declare function convert(
             height?: number;
             /** A list of page numbers to render (default is all pages) */
             page_numbers?: number[];
+            /** Throw error if num of pages exceeds this value */
+            max_pages?: number
             /** Whether to output the image in base64 format */
             base64?: boolean;
             /** Scaling ratio for the PDF page viewport */

@@ -1,4 +1,3 @@
-import fetch from 'node-fetch';
 import isURL from 'is-url';
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import * as Canvas from 'canvas';
@@ -20,6 +19,7 @@ NodeCanvasFactory.prototype = {
     assert(width > 0 && height > 0, "Invalid canvas size");
     const canvas = Canvas.createCanvas(width, height);
     const context = canvas.getContext("2d");
+    canvas.toBuffer(''); // why?
     return {
       canvas: canvas,
       context: context,
@@ -59,18 +59,20 @@ export async function convert(pdf, conversion_config = {}) {
   } else if (Buffer.isBuffer(pdf)) {
     pdfData = new Uint8Array(pdf);
   } else if (!(pdf instanceof Uint8Array)) {
-    return pdf;
+    throw new Error("Invalid pdf!")
   }
 
   const outputPages = [];
   const loadingTask = getDocument({ data: pdfData, disableFontFace: true, verbosity: 0 });
   const pdfDocument = await loadingTask.promise;
 
+  if (!isNaN(+conversion_config.max_pages) && pdfDocument.numPages > conversion_config.max_pages)
+    throw new Error('Too many pages!');
+
   const canvasFactory = new NodeCanvasFactory();
 
-  if (conversion_config.height <= 0 || conversion_config.width <= 0) {
-    console.error("Negative viewport dimension given. Defaulting to 100% scale.");
-  }
+  if (conversion_config.height <= 0 || conversion_config.width <= 0)
+    console.warn("Negative viewport dimension given. Defaulting to 100% scale.");
 
   const pageNumbers = conversion_config.page_numbers || Array.from({ length: pdfDocument.numPages }, (_, i) => i + 1);
 
@@ -99,13 +101,11 @@ export async function convert(pdf, conversion_config = {}) {
 // Render PDF pages
 async function docRender(pdfDocument, pageNo, canvasFactory, conversion_config) {
   if (pageNo < 1 || pageNo > pdfDocument.numPages) {
-    console.error("Invalid page number " + pageNo);
-    return;
+    throw new Error("Invalid page number " + pageNo);
   }
 
-  if (conversion_config.scale && conversion_config.scale <= 0) {
-    console.error("Invalid scale " + conversion_config.scale);
-    return;
+  if (!isNaN(+conversion_config.scale) && conversion_config.scale <= 0) {
+    throw new Error("Invalid scale " + conversion_config.scale);
   }
 
   const page = await pdfDocument.getPage(pageNo);
@@ -120,6 +120,10 @@ async function docRender(pdfDocument, pageNo, canvasFactory, conversion_config) 
     viewport = page.getViewport({ scale });
   }
 
+  const ratio = viewport.height / viewport.width;
+  if (isNaN(ratio) || !ratio || ratio > 3)
+    throw new Error('Invalid page size!');
+
   const canvasAndContext = canvasFactory.create(viewport.width, viewport.height);
   const renderContext = {
     canvasContext: canvasAndContext.context,
@@ -128,7 +132,7 @@ async function docRender(pdfDocument, pageNo, canvasFactory, conversion_config) 
   };
 
   await page.render(renderContext).promise;
-  const image = canvasAndContext.canvas.toBuffer();
+  const image = canvasAndContext.canvas.toBuffer('image/jpeg');
 
   // Properly destroy canvas resources
   canvasFactory.destroy(canvasAndContext);
